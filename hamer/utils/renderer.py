@@ -248,9 +248,9 @@ class Renderer:
         return output_img
 
     def vertices_to_trimesh(self, vertices, camera_translation, mesh_base_color=(1.0, 1.0, 0.9), 
-                            rot_axis=[1,0,0], rot_angle=0, is_right=1):
+                            rot_axis=[1,0,0], rot_angle=0, is_right=1, save_mesh=False):#FIXME
         # material = pyrender.MetallicRoughnessMaterial(
-        #     metallicFactor=0.0,
+        #     metallicFactor=0.0，
         #     alphaMode='OPAQUE',
         #     baseColorFactor=(*mesh_base_color, 1.0))
         vertex_colors = np.array([(*mesh_base_color, 1.0)] * vertices.shape[0])
@@ -263,10 +263,11 @@ class Renderer:
         rot = trimesh.transformations.rotation_matrix(
                 np.radians(rot_angle), rot_axis)
         mesh.apply_transform(rot)
-
-        rot = trimesh.transformations.rotation_matrix(
-            np.radians(180), [1, 0, 0])
-        mesh.apply_transform(rot)
+        # FIXME:
+        if not save_mesh:
+            rot = trimesh.transformations.rotation_matrix(
+                np.radians(180), [1, 0, 0])
+            mesh.apply_transform(rot)
         return mesh
 
     def render_rgba(
