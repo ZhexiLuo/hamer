@@ -178,7 +178,7 @@ class OutputManager:
         if save_mesh:
             outputs['mesh'] = self._save_mesh(output_dir, img_fn, person_id, recon_data)
         outputs['params_pt'], outputs['params_json'] = self._save_params(output_dir, img_fn, recon_data, hand_data)
-        outputs['mask'] = self._save_mask(output_dir, img_fn, recon_data, focal_length, full_frame)
+        outputs['depth'] = self._save_depth(output_dir, img_fn, recon_data, focal_length, full_frame)
         outputs['camera_params'] = self._save_camera_params(output_dir, img_fn, recon_data, focal_length)
 
         return outputs
@@ -229,21 +229,31 @@ class OutputManager:
             json.dump(self._to_serializable(info), f, indent=2, ensure_ascii=False)
         return pt_path, json_path
 
-    def _save_mask(self, out_folder, img_fn, recon_data, focal_length, full_frame=True):
+    def _save_depth(self, out_folder, img_fn, recon_data, focal_length, full_frame=True):
+        """
+        Save depth map of hand mesh.
+
+        Depth values:
+            - Hand region: positive float values (distance from camera in meters)
+            - Background (non-hand region): 0.0
+
+        To convert depth to binary mask: mask = (depth > 0)
+        """
         if not (full_frame and len(recon_data['vertices']) > 0):
             return None
 
         n = 0
         misc_args = dict(mesh_base_color=LIGHT_BLUE, scene_bg_color=(1, 1, 1), focal_length=focal_length)
-        cam_view = self.renderer.render_rgba_multiple(recon_data['vertices'], cam_t=recon_data['cam_transl'], render_res=recon_data['img_size'][n], is_right=recon_data['is_right'], **misc_args)
+        _, depth = self.renderer.render_rgba_multiple(
+            recon_data['vertices'], cam_t=recon_data['cam_transl'],
+            render_res=recon_data['img_size'][n], is_right=recon_data['is_right'],
+            return_depth=True, **misc_args
+        )
 
-        # Single channel binary mask: 255=background, 0=hand
-        hand_mask = np.ones((cam_view.shape[0], cam_view.shape[1]), dtype=np.uint8) * 255
-        hand_mask[cam_view[:,:,3] > 0] = 0
+        depth_path = os.path.join(str(out_folder), f"{img_fn}_depth.npy")
+        np.save(depth_path, depth.astype(np.float32))
 
-        mask_path = os.path.join(str(out_folder), f"{img_fn}_mask.png")
-        Image.fromarray(hand_mask, mode='L').save(mask_path)
-        return mask_path
+        return depth_path
 
     def _save_camera_params(self, out_folder, img_fn, recon_data, focal_length):
         n = 0

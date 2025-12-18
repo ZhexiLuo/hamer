@@ -343,6 +343,7 @@ class Renderer:
             render_res=[256, 256],
             focal_length=None,
             is_right=None,
+            return_depth=False,
         ):
 
         renderer = pyrender.OffscreenRenderer(viewport_width=render_res[0],
@@ -384,6 +385,8 @@ class Renderer:
         color = color.astype(np.float32) / 255.0
         renderer.delete()
 
+        if return_depth:
+            return color, rend_depth
         return color
 
     def add_lighting(self, scene, cam_node, color=np.ones(3), intensity=1.0):
