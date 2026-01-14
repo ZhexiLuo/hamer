@@ -33,9 +33,11 @@ DEFAULT_BATCH_SIZE = 1
 
 class ModelManager:
     """Handles loading of all models and the renderer."""
-    def __init__(self):
+    def __init__(self, gpu_id: int = 0):
         print("Initializing ModelManager...")
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.device = torch.device(f'cuda:{gpu_id}' if torch.cuda.is_available() else 'cpu')
+        if torch.cuda.is_available():
+            torch.cuda.set_device(gpu_id)
 
         self._patch_hamer_paths()
 
@@ -222,9 +224,9 @@ class OutputManager:
             'boxes': hand_data['bboxes'],
             'batch_size': recon_data['batch']['img'].shape[0]
         }
-        pt_path = os.path.join(str(out_folder), f"{img_fn}_params.pt")
+        pt_path = os.path.join(str(out_folder), f"{img_fn}_hand.pt")
         torch.save(info, pt_path)
-        json_path = os.path.join(str(out_folder), f"{img_fn}_params.json")
+        json_path = os.path.join(str(out_folder), f"{img_fn}_hand.json")
         with open(json_path, 'w') as f:
             json.dump(self._to_serializable(info), f, indent=2, ensure_ascii=False)
         return pt_path, json_path
@@ -250,7 +252,7 @@ class OutputManager:
             return_depth=True, **misc_args
         )
 
-        depth_path = os.path.join(str(out_folder), f"{img_fn}_depth.npy")
+        depth_path = os.path.join(str(out_folder), f"{img_fn}_hand.npy")
         np.save(depth_path, depth.astype(np.float32))
 
         return depth_path
@@ -268,7 +270,7 @@ class OutputManager:
             'cy': 0.5
         }
 
-        path = os.path.join(str(out_folder), "camera_params.json")
+        path = os.path.join(str(out_folder), f"{img_fn}_camera.json")
         with open(path, 'w') as f:
             json.dump(cam_info, f, indent=4)
 
@@ -286,9 +288,9 @@ class OutputManager:
 
 class HandReconstructionService:
     """Orchestrates the hand reconstruction pipeline."""
-    def __init__(self):
+    def __init__(self, gpu_id: int = 0):
         print("Initializing HandReconstructionService...")
-        models = ModelManager()
+        models = ModelManager(gpu_id)
         self.model_cfg = models.model_cfg
         self.detection_manager = DetectionManager(models.body_detector, models.keypoint_detector)
         self.reconstruction_manager = ReconstructionManager(models.hamer_model, models.model_cfg, models.device)
@@ -347,11 +349,16 @@ def predict():
     )
     return jsonify(result)
 
+@app.route('/health', methods=['GET'])
+def health():
+    return jsonify({"status": "ok", "model": "HaMeR"})
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='HaMeR Hand Reconstruction Server')
     parser.add_argument('--port', type=int, default=5002, help='Server port')
     parser.add_argument('--host', type=str, default='0.0.0.0', help='Server host')
+    parser.add_argument('--gpu', type=int, default=0, help='GPU device ID')
     args = parser.parse_args()
 
-    hand_reconstruction_service = HandReconstructionService()
-    app.run(host=args.host, port=args.port, debug=True, use_reloader=False)
+    hand_reconstruction_service = HandReconstructionService(gpu_id=args.gpu)
+    app.run(host=args.host, port=args.port, debug=False, use_reloader=False)
